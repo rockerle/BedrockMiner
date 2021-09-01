@@ -1,6 +1,5 @@
 package bedrockminer.bm.client;
 
-import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerEntity;
@@ -8,14 +7,17 @@ import net.minecraft.client.world.ClientWorld;
 import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
-import net.minecraft.item.ToolItem;
 import net.minecraft.network.packet.c2s.play.PlayerActionC2SPacket;
+import net.minecraft.state.property.Properties;
 import net.minecraft.text.LiteralText;
 import net.minecraft.util.Hand;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
+
+import java.util.Collection;
+import java.util.Optional;
 
 public class BlockInteractions {
 
@@ -40,27 +42,10 @@ public class BlockInteractions {
                 MinecraftClient.getInstance().player,
                 MinecraftClient.getInstance().world,
                 Hand.MAIN_HAND,
-                new BlockHitResult(Vec3d.ofCenter(bedrockPos),
-                        getView(pistonPos,bedrockPos),
+                new BlockHitResult(Vec3d.ofCenter(pistonPos.add(0,1,0)),
+                        Direction.UP,
                         pistonPos,
                         true));
-    }
-
-    private static Direction getView(BlockPos b1, BlockPos b2){
-        if(b1.getY()-b2.getY()<0)
-            return Direction.DOWN;
-        else if(b1.getY()-b2.getY()>0)
-            return Direction.UP;
-        else if(b1.getX()-b2.getX()<0)
-            return Direction.WEST;
-        else if(b1.getX()-b2.getX()>0)
-            return Direction.EAST;
-        else if(b1.getZ()-b2.getZ()<0)
-            return Direction.NORTH;
-        else if(b1.getZ()-b2.getZ()>0)
-            return Direction.SOUTH;
-        else
-            return null;
     }
 
     private static void selectPickaxe(){
@@ -68,6 +53,7 @@ public class BlockInteractions {
         PlayerInventory inv = player.getInventory();
         int pickSlot = -1;
         ItemStack tempStack;
+        player.sendSystemMessage(new LiteralText("selecting Pick"), null);
         for(int i=0;i<36;i++){
             tempStack = inv.getStack(i);
             if(tempStack.isOf(Items.DIAMOND_PICKAXE) || tempStack.isOf(Items.NETHERITE_PICKAXE) || tempStack.isOf(Items.STONE_PICKAXE) || tempStack.isOf(Items.WOODEN_PICKAXE) || tempStack.isOf(Items.IRON_PICKAXE)) {
@@ -75,6 +61,9 @@ public class BlockInteractions {
                 break;
             }
         }
+        if(inv.selectedSlot==pickSlot)
+            return;
+
         if(pickSlot==-1)
             return;
 
@@ -87,6 +76,7 @@ public class BlockInteractions {
     private static void selectPiston(){
         //ClientPlayerEntity player = MinecraftClient.getInstance().player;
         PlayerInventory inv = player.getInventory();
+        player.sendSystemMessage(new LiteralText("selecting Piston"), null);
         int pistonSlot = inv.getSlotWithStack(new ItemStack(Items.PISTON));
         if(pistonSlot==-1)
             return;
@@ -102,7 +92,7 @@ public class BlockInteractions {
         if(piston == null)
             return null;
 
-        for(int x=-1;x<2;x++){
+        /*for(int x=-1;x<2;x++){
             for(int y=-1;y<2;y++){
                 for(int z=-1;z<2;z++){
                     if(MinecraftClient.getInstance().world.getBlockState(piston.add(x,y,z)).isOf(Blocks.BEDROCK)){
@@ -111,8 +101,22 @@ public class BlockInteractions {
                     }
                 }
             }
-        }
-        return result;
+        }*/
+
+        if(player.world.getBlockState(piston.add(-1,0,0)).isOf(Blocks.BEDROCK))
+            return new BlockPos(piston.add(-1,0,0));
+        if(player.world.getBlockState(piston.add(1,0,0)).isOf(Blocks.BEDROCK))
+            return new BlockPos(piston.add(1,0,0));
+        if(player.world.getBlockState(piston.add(0,0,-1)).isOf(Blocks.BEDROCK))
+            return new BlockPos(piston.add(0,0,-1));
+        if(player.world.getBlockState(piston.add(0,0,1)).isOf(Blocks.BEDROCK))
+            return new BlockPos(piston.add(0,0,1));
+        if(player.world.getBlockState(piston.add(0,1,0)).isOf(Blocks.BEDROCK))
+            return new BlockPos(piston.add(0,1,0));
+        if(player.world.getBlockState(piston.add(0,-1,0)).isOf(Blocks.BEDROCK))
+            return new BlockPos(piston.add(0,-1,0));
+
+        return null;
     }
 
     public static BlockPos findPistonBody(BlockPos redstoneTorch, ClientWorld world){
