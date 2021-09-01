@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "id": "bedrockminer",
+  "version": "${version}",
+  "name": "BedrockMiner",
+  "description": "",
+  "authors": ["rockerle"],
+  "contact": {},
+  "license": "MIT",
+  "icon": "assets/BedrockMiner/icon.png",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "bedrockminer.bm.client.BmClient"
+    ],
+    "main": [
+    ]
+  },
+  "mixins": [
+    "BedrockMiner.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.11.6",
+    "fabric": "*",
+    "minecraft": "1.17.1"
+  }
+}
