@@ -1,0 +1,14 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "bedrockminer.bm.mixins",
+  "compatibilityLevel": "JAVA_16",
+  "mixins": [
+  ],
+  "client": [
+    "PlayerMiningMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
