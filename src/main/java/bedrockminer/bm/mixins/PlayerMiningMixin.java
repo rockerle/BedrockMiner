@@ -23,9 +23,10 @@ public abstract class PlayerMiningMixin {
             BlockPos redstoneTorch = BlockInteractions.findRedstoneTorch(this.client.player.getBlockPos(),this.client.world);
             BlockPos pistonPos = BlockInteractions.findPistonBody(redstoneTorch,this.client.world);
             if(redstoneTorch!=null) {
+                BlockPos bedrockPos = BlockInteractions.findBedrock(pistonPos);
                 BlockInteractions.breakBlock(redstoneTorch);
                 BlockInteractions.breakBlock(pistonPos);
-                BlockInteractions.replacePiston(pistonPos,BlockInteractions.findBedrock(pistonPos));
+                BlockInteractions.replacePiston(pistonPos,bedrockPos);
                 BmClient.breaking = false;
             }
         }
