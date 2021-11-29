@@ -1,5 +1,5 @@
 # BedrockMiner
-Mod for TnT'less Bedrock breaking
+Fabric Mod for Vanilla Minecraft TnT'less Bedrock breaking
 
 Needs a efficienty 5 pickaxe to mine the piston fast enough.
 Haste beacon is not necessary!!!!
