@@ -115,4 +115,8 @@ public class BlockInteractions {
             MinecraftClient.getInstance().player.sendSystemMessage(new LiteralText("No Redstone Torch Found"),null);
         return result;
     }
+
+    public static void buildAndBreak(){
+        ClientPlayerEntity player = MinecraftClient.getInstance().player;
+    }
 }

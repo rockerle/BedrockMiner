@@ -32,4 +32,12 @@ public abstract class PlayerMiningMixin {
             }
         }
     }
+
+    @Inject(at=@At("HEAD"),method="sendChatMessage", cancellable = true)
+    public void onSendMessage(String message,CallbackInfo ci){
+        if(message.equals(".b")){
+            BlockInteractions.buildAndBreak();
+            ci.cancel();
+        }
+    }
 }
