@@ -3,7 +3,9 @@ package bedrockminer.bm.client;
 import net.minecraft.block.Block;
 import net.minecraft.block.Blocks;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.network.ClientPlayNetworkHandler;
 import net.minecraft.client.network.ClientPlayerEntity;
+import net.minecraft.client.network.ClientPlayerInteractionManager;
 import net.minecraft.client.world.ClientWorld;
 import net.minecraft.enchantment.EnchantmentHelper;
 import net.minecraft.enchantment.Enchantments;
@@ -18,35 +20,42 @@ import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 
-public class BlockInteractions {
 
-    static ClientPlayerEntity player = MinecraftClient.getInstance().player;
+public class Miner {
 
-    public static void breakBlock(BlockPos blockPos){
+    private final ClientPlayerEntity player;
+    private final ClientPlayNetworkHandler netHandler;
+    private final ClientPlayerInteractionManager interactionManager;
+
+    public Miner(ClientPlayerEntity player){
+        this.player = player;
+        this.netHandler = player.networkHandler;
+        this.interactionManager = MinecraftClient.getInstance().interactionManager;
+    }
+
+    public void mineBedrock(){
+        BlockPos redstoneTorch = findRedstoneTorch();
+        BlockPos pistonPos = findPistonBody(redstoneTorch);
+        if(redstoneTorch!=null) {
+            int currentSlot = player.getInventory().selectedSlot;
+            breakBlock(redstoneTorch);
+            breakBlock(pistonPos);
+            replacePiston(pistonPos);
+            player.getInventory().selectedSlot = currentSlot;
+        }
+    }
+
+    public void breakBlock(BlockPos blockPos){
         if(blockPos==null)
             return;
         selectPickaxe();
-        MinecraftClient.getInstance().getNetworkHandler().sendPacket(
+        netHandler.sendPacket(
                 new PlayerActionC2SPacket(PlayerActionC2SPacket.Action.START_DESTROY_BLOCK,blockPos,player.getHorizontalFacing()));
-        MinecraftClient.getInstance().getNetworkHandler().sendPacket(
+        netHandler.sendPacket(
                 new PlayerActionC2SPacket(PlayerActionC2SPacket.Action.STOP_DESTROY_BLOCK,blockPos,player.getHorizontalFacing()));
     }
 
-    public static void replacePiston(BlockPos pistonPos){
-        if(pistonPos==null)
-            return;
-        selectPiston();
-        MinecraftClient.getInstance().interactionManager.interactBlock(
-                MinecraftClient.getInstance().player,
-                MinecraftClient.getInstance().world,
-                Hand.MAIN_HAND,
-                new BlockHitResult(Vec3d.ofCenter(pistonPos),
-                        MinecraftClient.getInstance().world.getBlockState(pistonPos).get(Properties.FACING).getOpposite(),
-                        pistonPos,
-                        true));
-    }
-
-    private static void selectPickaxe(){
+    private void selectPickaxe(){
         PlayerInventory inv = player.getInventory();
         int pickSlot = -1;
         ItemStack tempStack;
@@ -64,10 +73,10 @@ public class BlockInteractions {
         if(pickSlot<9)
             inv.selectedSlot = pickSlot;
         else
-            MinecraftClient.getInstance().interactionManager.pickFromInventory(pickSlot);
+            interactionManager.pickFromInventory(pickSlot);
     }
 
-    private static void selectPiston(){
+    private void selectPiston(){
         PlayerInventory inv = player.getInventory();
         int pistonSlot = inv.getSlotWithStack(new ItemStack(Items.PISTON));
         if(pistonSlot==-1)
@@ -75,13 +84,15 @@ public class BlockInteractions {
         if(pistonSlot<9)
             inv.selectedSlot = pistonSlot;
         else
-            MinecraftClient.getInstance().interactionManager.pickFromInventory(pistonSlot);
+            interactionManager.pickFromInventory(pistonSlot);
     }
 
-    public static BlockPos findPistonBody(BlockPos redstoneTorch, ClientWorld world){
+    private BlockPos findPistonBody(BlockPos redstoneTorch){
         BlockPos result = null;
+        ClientWorld world = (ClientWorld) player.getWorld();
         if(redstoneTorch == null)
             return null;
+
         for(int x=-1;x<2;x++){
             for(int z=-1;z<2;z++) {
                 for(int y=-1;y<2;y++){
@@ -95,11 +106,12 @@ public class BlockInteractions {
         return result;
     }
 
-    public static BlockPos findRedstoneTorch(BlockPos playerPos, ClientWorld world){
+    private BlockPos findRedstoneTorch(){
         BlockPos result = null;
+        BlockPos playerPos = player.getBlockPos();
+        ClientWorld world = (ClientWorld) player.getWorld();
         Block boi;
-        if(playerPos == null)
-            return null;
+
         for(int x=-3;x<3;x++){
             for(int z=-3;z<3;z++){
                 for(int y=-1;y<3;y++) {
@@ -112,11 +124,21 @@ public class BlockInteractions {
             }
         }
         if(result == null)
-            MinecraftClient.getInstance().player.sendSystemMessage(new LiteralText("No Redstone Torch Found"),null);
+            player.sendSystemMessage(new LiteralText("No Redstone Torch Found"),null);
         return result;
     }
 
-    public static void buildAndBreak(){
-        ClientPlayerEntity player = MinecraftClient.getInstance().player;
+    public void replacePiston(BlockPos pistonPos){
+        if(pistonPos==null)
+            return;
+        selectPiston();
+        interactionManager.interactBlock(
+                player,
+                (ClientWorld) player.getWorld(),
+                Hand.MAIN_HAND,
+                new BlockHitResult(Vec3d.ofCenter(pistonPos),
+                        player.getWorld().getBlockState(pistonPos).get(Properties.FACING).getOpposite(),
+                        pistonPos,
+                        true));
     }
 }

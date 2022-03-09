@@ -12,13 +12,14 @@ import org.lwjgl.glfw.GLFW;
 
 @Environment(EnvType.CLIENT)
 public class BmClient implements ClientModInitializer {
+
     private KeyBinding mineBedrock;
     public static boolean breaking;
 
     @Override
     public void onInitializeClient() {
         breaking = false;
-        mineBedrock = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+        /*mineBedrock = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.bedrock.stuff",
                 InputUtil.Type.KEYSYM,
                 GLFW.GLFW_KEY_B,
@@ -26,7 +27,7 @@ public class BmClient implements ClientModInitializer {
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             if(mineBedrock.wasPressed() && MinecraftClient.getInstance().world != null)
                 breaking = !breaking;
-        });
+        });*/
     }
 
     public static boolean breakBedrock(){
