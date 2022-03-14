@@ -27,11 +27,18 @@ public class Miner {
     private final ClientPlayNetworkHandler netHandler;
     private final ClientPlayerInteractionManager interactionManager;
 
+    boolean automining;
+
     public Miner(ClientPlayerEntity player){
         this.player = player;
         this.netHandler = player.networkHandler;
         this.interactionManager = MinecraftClient.getInstance().interactionManager;
+
+        automining = false;
     }
+
+    public void startAutoMining(){automining = true;}
+    public void stopAutoMining(){automining = false;}
 
     public void mineBedrock(){
         BlockPos redstoneTorch = findRedstoneTorch();
