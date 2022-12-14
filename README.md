@@ -5,7 +5,7 @@ Fabric Mod for Vanilla Minecraft TnT'less Bedrock breaking
 ![Stars](https://img.shields.io/github/stars/rockerle/BedrockMiner)
 ![Issues](https://img.shields.io/github/issues/rockerle/BedrockMiner)
 
-Needs a efficienty 5 pickaxe to mine the piston fast enough.
+Needs a efficiency 5 pickaxe to mine the piston fast enough.
 Haste beacon is not necessary!!!!
 
 press 'b' for activating bedrock removal.
