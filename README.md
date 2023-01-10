@@ -13,3 +13,9 @@ You need to look away from the bedrock block you want to remove.
 
 https://user-images.githubusercontent.com/16375280/143857501-9bb6c00c-d944-4043-9717-29275675a8e8.mp4
 
+
+<details><summary>Bonus gif with hints for future updates</summary>
+
+  ![future plans](https://media.giphy.com/media/GZcA86fSwON8OOXqj2/giphy-downsized-large.gif)
+  
+</details>
