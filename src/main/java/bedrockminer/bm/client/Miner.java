@@ -1,13 +1,12 @@
 package bedrockminer.bm.client;
 
-import net.minecraft.block.Block;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.Blocks;
+import net.minecraft.block.*;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayNetworkHandler;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.network.ClientPlayerInteractionManager;
 import net.minecraft.client.world.ClientWorld;
+import net.minecraft.enchantment.Enchantment;
 import net.minecraft.enchantment.EnchantmentHelper;
 import net.minecraft.enchantment.Enchantments;
 import net.minecraft.entity.player.PlayerInventory;
@@ -20,129 +19,199 @@ import net.minecraft.state.property.Properties;
 import net.minecraft.text.Text;
 import net.minecraft.util.Hand;
 import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Direction;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.util.math.*;
+
+import java.util.List;
 
 
-public class Miner {
+public class Miner{
 
+    private Task currentTask;
     private final ClientPlayerEntity player;
     private final ClientPlayNetworkHandler netHandler;
     private final ClientPlayerInteractionManager interactionManager;
-
+    private Direction toFace;
+    //private Direction clickOffset;
     private boolean alreadyRunning;
+    private BlockPos bedrockBlock;
+    private BlockPos supportBlock;
+    private BlockPos torchPos;
+    private PistonPlacement pistonPlacement;
+    private boolean[] checks = {false,false}; //checklist for pistonplacement,torchplacement,
+    private int failedCounter = -1;
+
+    private List<Item> allowedTools = List.of(Items.NETHERITE_PICKAXE,Items.DIAMOND_PICKAXE);
+    private List<Item> allowedSupportBlocks = List.of(Items.SLIME_BLOCK, Items.NETHERRACK);
 
     public Miner(ClientPlayerEntity player){
         this.player = player;
         this.netHandler = player.networkHandler;
         this.interactionManager = MinecraftClient.getInstance().interactionManager;
         this.alreadyRunning = false;
+        this.currentTask = Task.NOTHING;
     }
+    //-------------------- State Machine ---------------------------------------
+    public void tick(){
+        switch(currentTask){
+            case INIT -> {
+                if(failedCounter>0){
+                    player.sendMessage(Text.of("Couldn't find valid piston location"),true);
+                    reset();
+                    break;
+                }
+                if(pistonPlacement!=null)
+                    torchPos = findRedstoneTorchPlace(pistonPlacement.pos(),pistonPlacement.dir());
+                if(pistonPlacement!=null && torchPos!=null) {
+                    this.toFace = pistonPlacement.dir().getOpposite();
 
-    public void oneClickMining(BlockPos bedrockPos){
-
-        if(!alreadyRunning) {
-            alreadyRunning = true;
-            PistonPlacement pp = findPlaceForPiston(bedrockPos);
-            placePiston(pp.pos, pp.dir.getOpposite());
-            BlockPos torch = findRedstoneTorchPlace(pp.pos, pp.dir);
-            if(torch==null) {
-                MinecraftClient.getInstance().player.sendMessage(Text.of("Couldn't find valid placement for redstone torch!"), true);
-                alreadyRunning = false;
-                return;
+                    this.currentTask = Task.ROTATEPLAYER;
+                    break;
+                }
+                if(pistonPlacement ==null || torchPos ==null){
+                    System.out.println("No valid position for piston found, maybe next time :(");
+                    this.currentTask = Task.NOTHING;
+                }
+                break;
             }
-            placeTorch(torch);
-            mineBedrock();
-            alreadyRunning = false;
+            case PLACEPISTON -> {
+                System.out.println("PLACEPISTON");
+                placePiston(pistonPlacement.pos,pistonPlacement.dir().getOpposite());
+                if(torchPos!=null && pistonPlacement!=null) {
+                    this.currentTask = Task.ROTATEPLAYER;
+                    toFace = Direction.DOWN;
+                    checks[0]=true;
+                } else {
+                    System.out.println("torchPos is "+torchPos + " and pistonPlacement is "+pistonPlacement);
+                }
+                break;
+            }
+            case REDSTONETORCH -> {
+                System.out.println("REDSTONETORCH");
+                if(supportBlock!=null){
+                    selectItem(null,allowedSupportBlocks);
+                    placeBlock(supportBlock);
+                }
+                if(torchPos!=null && checks[0] && !checks[1]) {
+                    placeTorch(torchPos);
+                    checks[1] = true;
+                    toFace = Direction.fromVector(pistonPlacement.pos.subtract(new Vec3i(bedrockBlock.getX(), bedrockBlock.getY(), bedrockBlock.getZ())));
+                    this.currentTask=Task.ROTATEPLAYER;
+                }
+                break;
+            }
+            case ROTATEPLAYER -> {
+                System.out.println("ROTATEPLAYER");
+                if(toFace!=null) {
+                    netHandler.sendPacket(
+                            new PlayerMoveC2SPacket.LookAndOnGround(
+                                    dirToYaw(toFace),
+                                    dirToPitch(toFace),
+                                    player.isOnGround()));
+                    if(!checks[0] && !checks[1])
+                        this.currentTask = Task.PLACEPISTON;
+                    if(checks[0] && !checks[1]) {
+                        this.currentTask = Task.REDSTONETORCH;
+                        this.toFace = Direction.DOWN;
+                    }
+                    if(checks[0]&&checks[1])
+                        this.currentTask = Task.SWITCHTOPICK;
+                } else{
+                    this.currentTask = Task.NOTHING;
+                }
+                break;
+            }
+            case SWITCHTOPICK ->{
+                selectPickaxe();
+                toFace=pistonPlacement.dir().getOpposite();
+                currentTask = Task.MINEPISTON;
+                break;
+            }
+            case MINEPISTON -> {
+                if(player.world.getBlockState(this.pistonPlacement.pos()).get(Properties.EXTENDED))
+                    mineBedrock();
+                else{
+                    System.out.println("Piston not extended, let's wait a tick");
+                    break;
+                }
+                if(this.supportBlock==null)
+                    this.currentTask = Task.NOTHING;
+                else
+                    this.currentTask = Task.MINESUPPORT;
+                checks[0]=checks[1]=false;
+                break;
+            }
+            case MINESUPPORT ->{
+                breakBlock(supportBlock);
+                this.supportBlock=null;
+                this.currentTask = Task.NOTHING;
+                break;
+            }
+            case NOTHING -> {
+                System.out.print("N");
+                checks[0]=checks[1]=false;
+                this.alreadyRunning=false;
+                this.failedCounter = -1;
+                //this.clickOffset = null;
+                this.bedrockBlock = null;
+            }
         }
     }
-
-    public void mineBedrock(){
-        BlockPos redstoneTorch = findRedstoneTorch();
-        BlockPos pistonPos = findPistonBody(redstoneTorch);
-        if(redstoneTorch!=null) {
-            int currentSlot = player.getInventory().selectedSlot;
-            breakBlock(redstoneTorch);
-            breakBlock(pistonPos);
-
-            replacePiston(pistonPos);
-            player.getInventory().selectedSlot = currentSlot;
-        }
+    public void start(BlockPos bp, Direction offsetDir){
+        this.currentTask = Task.INIT;
+        this.bedrockBlock = bp;
+        this.alreadyRunning=true;
+        //this.clickOffset = offsetDir;
+        this.pistonPlacement = new PistonPlacement(
+                bp.offset(offsetDir),
+                player.world.getBlockState(bp.offset(offsetDir).offset(Direction.UP)).isAir()?Direction.UP:canPistonExtend(bp.offset(offsetDir)));
+        System.out.println(" -- Task was set to: "+this.currentTask);
     }
-
-    public void breakBlock(BlockPos blockPos){
-        if(blockPos==null)
-            return;
-        int oldSlot = player.getInventory().selectedSlot;
-        selectPickaxe();
-        netHandler.sendPacket(
-                new PlayerActionC2SPacket(PlayerActionC2SPacket.Action.START_DESTROY_BLOCK,blockPos,player.getHorizontalFacing()));
-        netHandler.sendPacket(
-                new PlayerActionC2SPacket(PlayerActionC2SPacket.Action.STOP_DESTROY_BLOCK,blockPos,player.getHorizontalFacing()));
-        player.getInventory().selectedSlot = oldSlot;
-    }
-
-    public void replacePiston(BlockPos pistonPos){
-        if(pistonPos==null)
-            return;
-        int oldSlot = player.getInventory().selectedSlot;
-        selectPiston();
-        interactionManager.interactBlock(
-                player,
-                //(ClientWorld) player.getWorld(),
-                Hand.MAIN_HAND,
-                new BlockHitResult(Vec3d.ofCenter(pistonPos),
-                        player.getWorld().getBlockState(pistonPos).get(Properties.FACING).getOpposite(),
-                        pistonPos,
-                        true));
-        player.getInventory().selectedSlot = oldSlot;
-    }
-
     public boolean isRunning(){return this.alreadyRunning;}
+    public void reset(){
+        this.alreadyRunning=false;
+        this.bedrockBlock = null;
+        //this.clickOffset = null;
+        this.pistonPlacement = null;
+        this.currentTask = Task.NOTHING;
+    }
 
-    private void selectPickaxe(){
+    //-------------------- Inventory Actions -----------------------------------
+    public void selectPickaxe(){
         PlayerInventory inv = player.getInventory();
         int pickSlot = -1;
         ItemStack tempStack;
         for(int i=0;i<36;i++){
             tempStack = inv.getStack(i);
-            if(EnchantmentHelper.getLevel(Enchantments.EFFICIENCY,tempStack)==5) {
+            if(EnchantmentHelper.getLevel(Enchantments.EFFICIENCY,tempStack)==5 && allowedTools.contains(tempStack.getItem())) {
                 pickSlot = i;
                 break;
             }
-        }
-        if(inv.selectedSlot==pickSlot) {
-            player.sendMessage(Text.of("already holding a pick"), true);
         }
         if(pickSlot==-1) {
             player.sendMessage(Text.of("no pick in inventory found"), true);
 
         }
         if(pickSlot<9) {
-            player.sendMessage(Text.of("pick in hotbar on slot "+pickSlot+" found"), true);
             inv.selectedSlot = pickSlot;
         }
         else {
-            player.sendMessage(Text.of("pick in inventory found on slot "+pickSlot), true);
             interactionManager.pickFromInventory(pickSlot);
         }
     }
-
-    private void selectPiston(){
-        PlayerInventory inv = player.getInventory();
-        int pistonSlot = inv.getSlotWithStack(new ItemStack(Items.PISTON));
-        if(pistonSlot==-1)
-            return;
-        if(pistonSlot<9)
-            inv.selectedSlot = pistonSlot;
-        else
-            interactionManager.pickFromInventory(pistonSlot);
+    private boolean selectItem(Enchantment e, List<Item> items){
+        for (Item i : items) {
+            if(selectItem(e,i))
+                return true;
+        }
+        return false;
     }
-
-    private boolean selectItem(Item item){
+    private boolean selectItem(Enchantment e, Item item){
         PlayerInventory inv = player.getInventory();
-        int slot = inv.getSlotWithStack(new ItemStack(item));
+        ItemStack iS = new ItemStack(item);
+        if(e!=null)
+            iS.addEnchantment(e,5);
+
+        int slot = inv.getSlotWithStack(iS);
         if(slot == -1)
             return false;
         else if(slot < 9)
@@ -153,151 +222,118 @@ public class Miner {
         return true;
     }
 
-    private BlockPos findPistonBody(BlockPos redstoneTorch){
-        BlockPos result = null;
-        ClientWorld world = (ClientWorld) player.getWorld();
-        if(redstoneTorch == null)
-            return null;
-
-        for(int x=-1;x<2;x++){
-            for(int z=-1;z<2;z++) {
-                for(int y=-1;y<2;y++){
-                    if (world.getBlockState(redstoneTorch.add(x, y, z)).isOf(Blocks.PISTON) && world.getBlockState(redstoneTorch.add(x, y, z)).get(Properties.EXTENDED)) {
-                        result = redstoneTorch.add(x, y, z);
-                        break;
-                    }
-                }
-            }
-        }
-        return result;
-    }
-
-    private BlockPos findRedstoneTorch(){
-        BlockPos result = null;
-        BlockPos playerPos = player.getBlockPos();
-        ClientWorld world = (ClientWorld) player.getWorld();
-        Block boi;
-
-        for(int x=-3;x<3;x++){
-            for(int z=-3;z<3;z++){
-                for(int y=-1;y<3;y++) {
-                    boi = world.getBlockState(playerPos.add(x,y,z)).getBlock();
-                    if (boi == Blocks.REDSTONE_TORCH || boi == Blocks.REDSTONE_WALL_TORCH) {
-                        result = new BlockPos(playerPos.add(x,y,z));
-                        break;
-                    }
-                }
-            }
-        }
-        if(result == null)
-            player.sendMessage(Text.of("No Redstone Torch Found"),true);
-        return result;
-    }
-
-    private PistonPlacement findPlaceForPiston(BlockPos bedrockPos){
-        for(Direction d:Direction.values()){
-            BlockPos probe = bedrockPos.offset(d);
-            if(player.world.getBlockState(probe).isAir()) {
-                Direction ext = canPistonExtend(probe);
-                if(ext != null)
-                    return new PistonPlacement(probe,d);
-            }
-        }
-        return null;
-    }
-
+    //-------------------- Placement Checks ------------------------------------
     private Direction canPistonExtend(BlockPos pistonBody){
         for(Direction d: Direction.values()){
+            if(d.equals(Direction.UP))
+                continue;
             if(player.world.getBlockState(pistonBody.offset(d)).getMaterial().isReplaceable()){
                 return d;
             }
         }
         return null;
     }
-
-    private BlockPos findRedstoneTorchPlace(BlockPos pistonBody, Direction faceing){
+    private BlockPos findRedstoneTorchPlace(BlockPos pistonBody, Direction facing){
         for(Direction d:Direction.values()){
-            if(d.equals(faceing)) {
-                System.out.println("Skipping Direction: "+d);
+            if(d.equals(facing) /*|| d.equals(Direction.DOWN) */|| d.equals(Direction.UP)) {
                 continue;
             }
             BlockPos probePos = pistonBody.offset(d);
             BlockState probeState = player.world.getBlockState(probePos);
             if(probeState.getMaterial().isReplaceable() && player.world.getBlockState(probePos.down()).hasSolidTopSurface(player.world,probePos.down(),player)){
-                player.sendMessage(Text.of("That's a solid top surface"), true);
+                return probePos;
+            }else if(player.world.getBlockState(probePos.offset(Direction.DOWN)).isAir()){
+                supportBlock = probePos.offset(Direction.DOWN);
                 return probePos;
             }
         }
 
-        /*for(int yValue = pistonBody.getY()-1; yValue<pistonBody.getY()+1; yValue++){
-            BlockPos probe = new BlockPos(pistonBody.getX(),yValue,pistonBody.getZ());
-            for(Direction d: Direction.values()){
-                if(d.equals(Direction.UP) || d.equals(Direction.DOWN))
-                    continue;
-                else if(player.world.getBlockState(probe.offset(d)).isAir()){
-
-                }
-
-            }
-        }*/
-
         return null;
     }
-
+    //-------------------- World Interactions ----------------------------------
+    public void mineBedrock(){
+        breakBlock(this.torchPos);
+        breakBlock(this.pistonPlacement.pos());
+        replacePiston(this.pistonPlacement.pos());
+        if(this.supportBlock!=null) {
+            breakBlock(this.supportBlock);
+            this.supportBlock=null;
+        }
+        this.pistonPlacement=null;
+        this.torchPos=null;
+    }
     private void placePiston(BlockPos pistonPos, Direction dir){
         if(pistonPos==null || dir == null)
             return;
-        player.sendMessage(Text.of("placing piston @ "+pistonPos.toString()), true);
-        //System.out.println("Sending rotation packet with direction: " + dir.toString());
-        netHandler.sendPacket(new PlayerMoveC2SPacket.LookAndOnGround(dirToYaw(dir),dirToPitch(dir),player.isOnGround()));
-        //player.refreshPositionAndAngles(player.getBlockPos(), dirToYaw(dir),dirToPitch(dir));
-
-        //System.out.println("select piston to main hand");
-        selectPiston();
-
-        //System.out.println("placing piston in world");
+        selectItem(null,Items.PISTON);
         interactionManager.interactBlock(
                 player,
-                //(ClientWorld) player.world,
                 player.getActiveHand(),
                new BlockHitResult(Vec3d.ofCenter(pistonPos),dir,pistonPos,true));
     }
-
     private void placeTorch(BlockPos tp){
-        player.sendMessage(Text.of("placing torch @ " + tp.toString()), true);
-        selectItem(Items.REDSTONE_TORCH);
-        //player.refreshPositionAndAngles(player.getBlockPos(),dirToYaw(Direction.DOWN), dirToPitch(Direction.DOWN));
-        netHandler.sendPacket(new PlayerMoveC2SPacket.LookAndOnGround(dirToYaw(Direction.DOWN), player.getPitch(), player.isOnGround()));
+        selectItem(null,Items.REDSTONE_TORCH);
         interactionManager.interactBlock(
                 player,
-                //(ClientWorld) player.world,
                 player.getActiveHand(),
                 new BlockHitResult(
                         Vec3d.ofCenter(tp),
-                        Direction.DOWN,
+                        Direction.UP,
                         tp,
                         true
                 )
         );
     }
-
+    public void replacePiston(BlockPos pistonPos){
+        if(pistonPos==null)
+            return;
+        int oldSlot = player.getInventory().selectedSlot;
+        selectItem(null,Items.PISTON);
+        interactionManager.interactBlock(
+                player,
+                Hand.MAIN_HAND,
+                new BlockHitResult(Vec3d.ofCenter(pistonPos),
+                        pistonPlacement.dir().getOpposite(),
+                        pistonPos,
+                        true));
+        player.getInventory().selectedSlot = oldSlot;
+    }
+    private void placeBlock(BlockPos bp){interactionManager.interactBlock(
+            player,
+            player.getActiveHand(),
+            new BlockHitResult(Vec3d.ofCenter(bp),Direction.UP,bp,true));}
+    private void breakBlock(BlockPos blockPos){
+        netHandler.sendPacket(
+                new PlayerActionC2SPacket(PlayerActionC2SPacket.Action.START_DESTROY_BLOCK,blockPos,player.getHorizontalFacing()));
+        netHandler.sendPacket(
+                new PlayerActionC2SPacket(PlayerActionC2SPacket.Action.STOP_DESTROY_BLOCK,blockPos,player.getHorizontalFacing()));
+    }
+    //-------------------- Util ------------------------------------------------
     private float dirToYaw(Direction d){
-        switch(d) {
-            case NORTH: return 180.0f;
-            case EAST: return 270.0f;
-            case SOUTH: return 0.0f;
-            case WEST: return 90.0f;
-            default: return player.getYaw();
-        }
+        return switch (d) {
+            case NORTH -> 180.0f;
+            case EAST -> 270.0f;
+            case SOUTH -> 0.0f;
+            case WEST -> 90.0f;
+            default -> player.getYaw();
+        };
     }
-
     private float dirToPitch(Direction d){
-        switch(d){
-            case UP: return -90.0f;
-            case DOWN: return 90.0f;
-            default: return player.getPitch();
-        }
+        return switch (d) {
+            case UP -> -90.0f;
+            case DOWN -> 90.0f;
+            default -> player.getPitch();
+        };
     }
-
     private record PistonPlacement(BlockPos pos, Direction dir){}
+    public enum Task{
+        INIT,
+        PLACEPISTON,
+        REDSTONETORCH,
+        ROTATEPLAYER,
+        SWITCHTOPICK,
+        MINEPISTON,
+        MINESUPPORT,
+        NOTHING
+    }
 }

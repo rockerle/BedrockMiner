@@ -6,7 +6,7 @@
   "mixins": [
   ],
   "client": [
-    "PlayerMiningMixin"
+    "ClientPlayerInteractionManagerMixin"
   ],
   "injectors": {
     "defaultRequire": 1

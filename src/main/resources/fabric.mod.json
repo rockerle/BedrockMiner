@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "bedrockminer",
-  "version": "${version}",
+  "version": "2.0.0",
   "name": "BedrockMiner",
   "description": "",
   "authors": ["rockerle"],
@@ -20,9 +20,9 @@
     "BedrockMiner.mixins.json"
   ],
   "depends": {
-    "fabricloader": ">=0.14.8",
+    "fabricloader": ">=0.14.11",
     "fabric": "*",
-    "minecraft": "1.19.1",
+    "minecraft": "1.19.3",
     "java": ">=17"
   }
 }
