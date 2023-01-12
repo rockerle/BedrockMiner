@@ -5,7 +5,6 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayNetworkHandler;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.network.ClientPlayerInteractionManager;
-import net.minecraft.client.world.ClientWorld;
 import net.minecraft.enchantment.Enchantment;
 import net.minecraft.enchantment.EnchantmentHelper;
 import net.minecraft.enchantment.Enchantments;
@@ -31,7 +30,6 @@ public class Miner{
     private final ClientPlayNetworkHandler netHandler;
     private final ClientPlayerInteractionManager interactionManager;
     private Direction toFace;
-    //private Direction clickOffset;
     private boolean alreadyRunning;
     private BlockPos bedrockBlock;
     private BlockPos supportBlock;
@@ -50,7 +48,7 @@ public class Miner{
         this.alreadyRunning = false;
         this.currentTask = Task.NOTHING;
     }
-    //-------------------- State Machine ---------------------------------------
+    //-------------------- Miner ---------------------------------------
     public void tick(){
         switch(currentTask){
             case INIT -> {
@@ -68,31 +66,27 @@ public class Miner{
                     break;
                 }
                 if(pistonPlacement ==null || torchPos ==null){
-                    System.out.println("No valid position for piston found, maybe next time :(");
                     this.currentTask = Task.NOTHING;
                 }
                 break;
             }
             case PLACEPISTON -> {
-                System.out.println("PLACEPISTON");
                 placePiston(pistonPlacement.pos,pistonPlacement.dir().getOpposite());
                 if(torchPos!=null && pistonPlacement!=null) {
                     this.currentTask = Task.ROTATEPLAYER;
                     toFace = Direction.DOWN;
                     checks[0]=true;
-                } else {
-                    System.out.println("torchPos is "+torchPos + " and pistonPlacement is "+pistonPlacement);
                 }
                 break;
             }
             case REDSTONETORCH -> {
-                System.out.println("REDSTONETORCH");
                 if(supportBlock!=null){
                     selectItem(null,allowedSupportBlocks);
                     placeBlock(supportBlock);
                 }
                 if(torchPos!=null && checks[0] && !checks[1]) {
-                    placeTorch(torchPos);
+                    selectItem(null, Items.REDSTONE_TORCH);
+                    placeBlock(torchPos);
                     checks[1] = true;
                     toFace = Direction.fromVector(pistonPlacement.pos.subtract(new Vec3i(bedrockBlock.getX(), bedrockBlock.getY(), bedrockBlock.getZ())));
                     this.currentTask=Task.ROTATEPLAYER;
@@ -100,7 +94,6 @@ public class Miner{
                 break;
             }
             case ROTATEPLAYER -> {
-                System.out.println("ROTATEPLAYER");
                 if(toFace!=null) {
                     netHandler.sendPacket(
                             new PlayerMoveC2SPacket.LookAndOnGround(
@@ -127,10 +120,17 @@ public class Miner{
                 break;
             }
             case MINEPISTON -> {
+                if(failedCounter>0 || this.pistonPlacement==null)
+                    reset();
+                if(player.world.getBlockState(this.pistonPlacement.pos()).isOf(Blocks.MOVING_PISTON)){
+                    failedCounter++;
+                    break;
+                }
+
                 if(player.world.getBlockState(this.pistonPlacement.pos()).get(Properties.EXTENDED))
                     mineBedrock();
                 else{
-                    System.out.println("Piston not extended, let's wait a tick");
+                    failedCounter++;
                     break;
                 }
                 if(this.supportBlock==null)
@@ -147,12 +147,11 @@ public class Miner{
                 break;
             }
             case NOTHING -> {
-                System.out.print("N");
                 checks[0]=checks[1]=false;
                 this.alreadyRunning=false;
-                this.failedCounter = -1;
-                //this.clickOffset = null;
+                this.failedCounter = 0;
                 this.bedrockBlock = null;
+                this.supportBlock = null;
             }
         }
     }
@@ -160,17 +159,16 @@ public class Miner{
         this.currentTask = Task.INIT;
         this.bedrockBlock = bp;
         this.alreadyRunning=true;
-        //this.clickOffset = offsetDir;
         this.pistonPlacement = new PistonPlacement(
                 bp.offset(offsetDir),
                 player.world.getBlockState(bp.offset(offsetDir).offset(Direction.UP)).isAir()?Direction.UP:canPistonExtend(bp.offset(offsetDir)));
-        System.out.println(" -- Task was set to: "+this.currentTask);
+        if(this.pistonPlacement.pos().equals(player.getBlockPos()) || player.world.isOutOfHeightLimit(this.pistonPlacement.pos()))
+            this.pistonPlacement=null;
     }
     public boolean isRunning(){return this.alreadyRunning;}
     public void reset(){
         this.alreadyRunning=false;
         this.bedrockBlock = null;
-        //this.clickOffset = null;
         this.pistonPlacement = null;
         this.currentTask = Task.NOTHING;
     }
@@ -235,7 +233,7 @@ public class Miner{
     }
     private BlockPos findRedstoneTorchPlace(BlockPos pistonBody, Direction facing){
         for(Direction d:Direction.values()){
-            if(d.equals(facing) /*|| d.equals(Direction.DOWN) */|| d.equals(Direction.UP)) {
+            if(d.equals(facing) || d.equals(Direction.UP) || pistonBody.offset(d).equals(bedrockBlock)) {
                 continue;
             }
             BlockPos probePos = pistonBody.offset(d);
@@ -259,6 +257,7 @@ public class Miner{
             breakBlock(this.supportBlock);
             this.supportBlock=null;
         }
+        breakBlock(this.pistonPlacement.pos());
         this.pistonPlacement=null;
         this.torchPos=null;
     }
@@ -270,19 +269,6 @@ public class Miner{
                 player,
                 player.getActiveHand(),
                new BlockHitResult(Vec3d.ofCenter(pistonPos),dir,pistonPos,true));
-    }
-    private void placeTorch(BlockPos tp){
-        selectItem(null,Items.REDSTONE_TORCH);
-        interactionManager.interactBlock(
-                player,
-                player.getActiveHand(),
-                new BlockHitResult(
-                        Vec3d.ofCenter(tp),
-                        Direction.UP,
-                        tp,
-                        true
-                )
-        );
     }
     public void replacePiston(BlockPos pistonPos){
         if(pistonPos==null)
