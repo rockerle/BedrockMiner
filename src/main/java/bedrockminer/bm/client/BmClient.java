@@ -3,23 +3,17 @@ package bedrockminer.bm.client;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
-import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
-import net.minecraft.block.Block;
-import net.minecraft.block.Blocks;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
 import net.minecraft.text.Text;
 import org.lwjgl.glfw.GLFW;
 
-import java.util.List;
-
 @Environment(EnvType.CLIENT)
 public class BmClient implements ClientModInitializer {
     public static Boolean clickMine;
     public static Miner miner;
-    public static List<Block> mineableBlocks = List.of(Blocks.BEDROCK);
     @Override
     public void onInitializeClient() {
         clickMine = false;

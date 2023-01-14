@@ -20,6 +20,7 @@ import net.minecraft.util.Hand;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.*;
 
+import java.util.ArrayList;
 import java.util.List;
 
 
@@ -35,11 +36,13 @@ public class Miner{
     private BlockPos supportBlock;
     private BlockPos torchPos;
     private PistonPlacement pistonPlacement;
+    private Item pistonType;
     private boolean[] checks = {false,false}; //checklist for pistonplacement,torchplacement,
     private int failedCounter = -1;
 
-    private List<Item> allowedTools = List.of(Items.NETHERITE_PICKAXE,Items.DIAMOND_PICKAXE);
+    private final List<Item> allowedTools = List.of(Items.NETHERITE_PICKAXE,Items.DIAMOND_PICKAXE);
     private List<Item> allowedSupportBlocks = List.of(Items.SLIME_BLOCK, Items.NETHERRACK);
+    private List<Block> allowedBlocksToMine = new ArrayList<>(List.of(Blocks.BEDROCK));
 
     public Miner(ClientPlayerEntity player){
         this.player = player;
@@ -164,12 +167,25 @@ public class Miner{
                 player.world.getBlockState(bp.offset(offsetDir).offset(Direction.UP)).isAir()?Direction.UP:canPistonExtend(bp.offset(offsetDir)));
         if(this.pistonPlacement.pos().equals(player.getBlockPos()) || player.world.isOutOfHeightLimit(this.pistonPlacement.pos()))
             this.pistonPlacement=null;
+
+        int slot = player.getInventory().getSlotWithStack(new ItemStack(Items.PISTON));
+        if(slot>-1 && player.getInventory().getStack(slot).getCount()>=2) {
+            selectItem(null, Items.PISTON);
+            this.pistonType = Items.PISTON;
+        }else if((slot=player.getInventory().getSlotWithStack(new ItemStack(Items.STICKY_PISTON)))>-1 && player.getInventory().getStack(slot).getCount()>=2) {
+            selectItem(null, Items.STICKY_PISTON);
+            this.pistonType = Items.STICKY_PISTON;
+        }else {
+            player.sendMessage(Text.of("Not enough (sticky)Piston in inventory found"), true);
+            this.reset();
+        }
     }
     public boolean isRunning(){return this.alreadyRunning;}
     public void reset(){
         this.alreadyRunning=false;
         this.bedrockBlock = null;
         this.pistonPlacement = null;
+        this.pistonType = null;
         this.currentTask = Task.NOTHING;
     }
 
@@ -238,11 +254,13 @@ public class Miner{
             }
             BlockPos probePos = pistonBody.offset(d);
             BlockState probeState = player.world.getBlockState(probePos);
-            if(probeState.getMaterial().isReplaceable() && player.world.getBlockState(probePos.down()).hasSolidTopSurface(player.world,probePos.down(),player)){
-                return probePos;
-            }else if(player.world.getBlockState(probePos.offset(Direction.DOWN)).isAir()){
-                supportBlock = probePos.offset(Direction.DOWN);
-                return probePos;
+            if(probeState.isAir()) {
+                if (player.world.getBlockState(probePos.down()).hasSolidTopSurface(player.world, probePos.down(), player))
+                    return probePos;
+                else if (player.world.getBlockState(probePos.offset(Direction.DOWN)).isAir() && probePos.getY() > -63 && !player.world.isOutOfHeightLimit(probePos)) {
+                    supportBlock = probePos.offset(Direction.DOWN);
+                    return probePos;
+                }
             }
         }
 
@@ -264,7 +282,18 @@ public class Miner{
     private void placePiston(BlockPos pistonPos, Direction dir){
         if(pistonPos==null || dir == null)
             return;
-        selectItem(null,Items.PISTON);
+        selectItem(null,pistonType);
+//        int slot = player.getInventory().getSlotWithStack(new ItemStack(Items.PISTON));
+//        if(slot>-1 && player.getInventory().getStack(slot).getCount()>=2) {
+//            selectItem(null, Items.PISTON);
+//            this.pistonType = Items.PISTON;
+//        }else if((slot=player.getInventory().getSlotWithStack(new ItemStack(Items.STICKY_PISTON)))>-1 && player.getInventory().getStack(slot).getCount()>=2) {
+//            selectItem(null, Items.STICKY_PISTON);
+//            this.pistonType = Items.STICKY_PISTON;
+//        }else {
+//            player.sendMessage(Text.of("Not enough (sticky)Piston in inventory found"), true);
+//            this.reset();
+//        }
         interactionManager.interactBlock(
                 player,
                 player.getActiveHand(),
@@ -274,7 +303,7 @@ public class Miner{
         if(pistonPos==null)
             return;
         int oldSlot = player.getInventory().selectedSlot;
-        selectItem(null,Items.PISTON);
+        selectItem(null,pistonType);
         interactionManager.interactBlock(
                 player,
                 Hand.MAIN_HAND,
@@ -295,6 +324,9 @@ public class Miner{
                 new PlayerActionC2SPacket(PlayerActionC2SPacket.Action.STOP_DESTROY_BLOCK,blockPos,player.getHorizontalFacing()));
     }
     //-------------------- Util ------------------------------------------------
+    public List<Block> getTargetBlocks(){return allowedBlocksToMine;}
+    public void addTargetBlock(Block b){allowedBlocksToMine.add(b);}
+    public void removeTargetBlock(Block b){allowedBlocksToMine.remove(b);}
     private float dirToYaw(Direction d){
         return switch (d) {
             case NORTH -> 180.0f;
