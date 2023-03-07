@@ -11,7 +11,7 @@ Haste beacon is not necessary!!!!
 
 Version 2 has a vanilla like keybinding to toggle the miner. When activated just attack/left-click the bedrock block.
 
-<summary>While activated you can add or remove blocks that can be mined by the miner, with right clicking the blocks with an item.</summary>
+<details><summary></summary>While activated you can add or remove blocks that can be mined by the miner, with right clicking the blocks with an item.</details>
 
 The latest released version (v2.2) is currently only for the 1.19 mc versions on the release page. If you need/want this mod for a lower mc version either open an Issue here on Github and ask nicely or backport it yourself. The mc1.19.3 code is available in this repository.
 
