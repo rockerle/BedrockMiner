@@ -16,7 +16,6 @@ import net.minecraft.network.packet.c2s.play.PlayerActionC2SPacket;
 import net.minecraft.network.packet.c2s.play.PlayerMoveC2SPacket;
 import net.minecraft.state.property.Properties;
 import net.minecraft.text.Text;
-import net.minecraft.util.Hand;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.*;
 
@@ -36,7 +35,7 @@ public class Miner{
     private BlockPos supportBlock;
     private BlockPos torchPos;
     private PistonPlacement pistonPlacement;
-    private Item pistonType;
+    private Item pistonType, pickaxeType;
     private boolean[] checks = {false,false}; //checklist for pistonplacement,torchplacement,
     private int failedCounter = -1;
 
@@ -57,21 +56,19 @@ public class Miner{
             case INIT -> {
                 if(failedCounter>0){
                     player.sendMessage(Text.of("Couldn't find valid piston location"),true);
-                    reset();
+                    this.reset();
                     break;
                 }
                 if(pistonPlacement!=null)
                     torchPos = findRedstoneTorchPlace(pistonPlacement.pos(),pistonPlacement.dir());
                 if(pistonPlacement!=null && torchPos!=null) {
                     this.toFace = pistonPlacement.dir().getOpposite();
-
                     this.currentTask = Task.ROTATEPLAYER;
                     break;
                 }
                 if(pistonPlacement ==null || torchPos ==null){
-                    this.currentTask = Task.NOTHING;
+                    failedCounter++;
                 }
-                break;
             }
             case PLACEPISTON -> {
                 placePiston(pistonPlacement.pos,pistonPlacement.dir().getOpposite());
@@ -80,7 +77,6 @@ public class Miner{
                     toFace = Direction.DOWN;
                     checks[0]=true;
                 }
-                break;
             }
             case REDSTONETORCH -> {
                 if(supportBlock!=null){
@@ -94,7 +90,6 @@ public class Miner{
                     toFace = Direction.fromVector(pistonPlacement.pos.subtract(new Vec3i(bedrockBlock.getX(), bedrockBlock.getY(), bedrockBlock.getZ())));
                     this.currentTask=Task.ROTATEPLAYER;
                 }
-                break;
             }
             case ROTATEPLAYER -> {
                 if(toFace!=null) {
@@ -112,42 +107,43 @@ public class Miner{
                     if(checks[0]&&checks[1])
                         this.currentTask = Task.SWITCHTOPICK;
                 } else{
-                    this.currentTask = Task.NOTHING;
+                    player.sendMessage(Text.of("Direction to rotate was null while checks[] is: "+checks.toString()));
+                    this.reset();
                 }
-                break;
             }
             case SWITCHTOPICK ->{
-                selectPickaxe();
                 toFace=pistonPlacement.dir().getOpposite();
-                currentTask = Task.MINEPISTON;
-                break;
+                if(selectItem(Enchantments.EFFICIENCY,pickaxeType)){
+                    this.currentTask = Task.MINEPISTON;
+                }else{
+                    player.sendMessage(Text.of("§5Pickaxe has not been found!"));
+                    this.reset();
+                }
             }
             case MINEPISTON -> {
                 if(failedCounter>0 || this.pistonPlacement==null)
-                    reset();
+                    this.reset();
                 if(player.world.getBlockState(this.pistonPlacement.pos()).isOf(Blocks.MOVING_PISTON)){
+                    player.sendMessage(Text.of("probably too late to mine the piston in time. Try again another time"));
                     failedCounter++;
                     break;
                 }
 
-                if(player.world.getBlockState(this.pistonPlacement.pos()).get(Properties.EXTENDED))
+                if(player.world.getBlockState(this.pistonPlacement.pos()).get(Properties.EXTENDED)) {
                     mineBedrock();
-                else{
+                }else{
                     failedCounter++;
                     break;
                 }
                 if(this.supportBlock==null)
-                    this.currentTask = Task.NOTHING;
+                    this.reset();
                 else
                     this.currentTask = Task.MINESUPPORT;
                 checks[0]=checks[1]=false;
-                break;
             }
             case MINESUPPORT ->{
                 breakBlock(supportBlock);
-                this.supportBlock=null;
-                this.currentTask = Task.NOTHING;
-                break;
+                this.reset();
             }
             case NOTHING -> {
                 checks[0]=checks[1]=false;
@@ -167,16 +163,30 @@ public class Miner{
                 player.world.getBlockState(bp.offset(offsetDir).offset(Direction.UP)).isAir()?Direction.UP:canPistonExtend(bp.offset(offsetDir)));
         if(this.pistonPlacement.pos().equals(player.getBlockPos()) || player.world.isOutOfHeightLimit(this.pistonPlacement.pos()))
             this.pistonPlacement=null;
-
-        int slot = player.getInventory().getSlotWithStack(new ItemStack(Items.PISTON));
-        if(slot>-1 && player.getInventory().getStack(slot).getCount()>=2) {
-            selectItem(null, Items.PISTON);
-            this.pistonType = Items.PISTON;
-        }else if((slot=player.getInventory().getSlotWithStack(new ItemStack(Items.STICKY_PISTON)))>-1 && player.getInventory().getStack(slot).getCount()>=2) {
-            selectItem(null, Items.STICKY_PISTON);
-            this.pistonType = Items.STICKY_PISTON;
-        }else {
-            player.sendMessage(Text.of("Not enough (sticky)Piston in inventory found"), true);
+        if(!checkPickaxe()){
+            player.sendMessage(Text.of("$5No Pickaxe with Efficiency V in inventory found!"));
+            this.reset();
+        }
+        if(player.getInventory().contains(Items.PISTON.getDefaultStack())){
+            int s = player.getInventory().getSlotWithStack(Items.PISTON.getDefaultStack());
+            if(s>-1){
+                if(player.getInventory().getStack(s).getCount()>=2){
+                    this.pistonType = Items.PISTON;
+                    this.currentTask = Task.INIT;
+                    return;
+                }
+            }
+        }
+        if(player.getInventory().contains(Items.STICKY_PISTON.getDefaultStack())){
+            int s = player.getInventory().getSlotWithStack(Items.STICKY_PISTON.getDefaultStack());
+            if(s>-1){
+                if(player.getInventory().getStack(s).getCount()>=2){
+                    this.pistonType = Items.STICKY_PISTON;
+                    this.currentTask = Task.INIT;
+                }
+            }
+        }else{
+            player.sendMessage(Text.of("§4No sticky pistons found in inventory"));
             this.reset();
         }
     }
@@ -186,11 +196,12 @@ public class Miner{
         this.bedrockBlock = null;
         this.pistonPlacement = null;
         this.pistonType = null;
+        this.failedCounter = -1;
         this.currentTask = Task.NOTHING;
     }
 
     //-------------------- Inventory Actions -----------------------------------
-    public void selectPickaxe(){
+    private boolean checkPickaxe(){
         PlayerInventory inv = player.getInventory();
         int pickSlot = -1;
         ItemStack tempStack;
@@ -202,15 +213,11 @@ public class Miner{
             }
         }
         if(pickSlot==-1) {
-            player.sendMessage(Text.of("no pick in inventory found"), true);
-
+            player.sendMessage(Text.of("§5no pickaxe in inventory found"), true);
+            return false;
         }
-        if(pickSlot<9) {
-            inv.selectedSlot = pickSlot;
-        }
-        else {
-            interactionManager.pickFromInventory(pickSlot);
-        }
+        pickaxeType = inv.getStack(pickSlot).getItem();
+        return true;
     }
     private boolean selectItem(Enchantment e, List<Item> items){
         for (Item i : items) {
@@ -221,12 +228,23 @@ public class Miner{
     }
     private boolean selectItem(Enchantment e, Item item){
         PlayerInventory inv = player.getInventory();
-        ItemStack iS = new ItemStack(item);
-        if(e!=null)
-            iS.addEnchantment(e,5);
-
-        int slot = inv.getSlotWithStack(iS);
-        if(slot == -1)
+        ItemStack iS;
+        int slot = -1;
+        for(int i=0;i<36;i++){
+            iS = inv.getStack(i);
+            if(iS.isOf(item)) {
+                if(e==null) {
+                    slot = i;
+                    break;
+                } else {
+                    if(EnchantmentHelper.getLevel(e,iS)==5){
+                        slot = i;
+                        break;
+                    }
+                }
+            }
+        }
+        if(slot < 0)
             return false;
         else if(slot < 9)
             inv.selectedSlot = slot;
@@ -257,17 +275,16 @@ public class Miner{
             if(probeState.isAir()) {
                 if (player.world.getBlockState(probePos.down()).hasSolidTopSurface(player.world, probePos.down(), player))
                     return probePos;
-                else if (player.world.getBlockState(probePos.offset(Direction.DOWN)).isAir() && probePos.getY() > -63 && !player.world.isOutOfHeightLimit(probePos)) {
+                else if (player.world.getBlockState(probePos.offset(Direction.DOWN)).isAir() && !probePos.offset(Direction.DOWN).equals(player.getBlockPos().add(0,1,0)) && !probePos.offset(Direction.DOWN).equals(player.getBlockPos()) && probePos.getY() > -63 && !player.world.isOutOfHeightLimit(probePos)) {
                     supportBlock = probePos.offset(Direction.DOWN);
                     return probePos;
                 }
             }
         }
-
         return null;
     }
     //-------------------- World Interactions ----------------------------------
-    public void mineBedrock(){
+    private void mineBedrock(){
         breakBlock(this.torchPos);
         breakBlock(this.pistonPlacement.pos());
         replacePiston(this.pistonPlacement.pos());
@@ -283,30 +300,19 @@ public class Miner{
         if(pistonPos==null || dir == null)
             return;
         selectItem(null,pistonType);
-//        int slot = player.getInventory().getSlotWithStack(new ItemStack(Items.PISTON));
-//        if(slot>-1 && player.getInventory().getStack(slot).getCount()>=2) {
-//            selectItem(null, Items.PISTON);
-//            this.pistonType = Items.PISTON;
-//        }else if((slot=player.getInventory().getSlotWithStack(new ItemStack(Items.STICKY_PISTON)))>-1 && player.getInventory().getStack(slot).getCount()>=2) {
-//            selectItem(null, Items.STICKY_PISTON);
-//            this.pistonType = Items.STICKY_PISTON;
-//        }else {
-//            player.sendMessage(Text.of("Not enough (sticky)Piston in inventory found"), true);
-//            this.reset();
-//        }
         interactionManager.interactBlock(
                 player,
                 player.getActiveHand(),
                new BlockHitResult(Vec3d.ofCenter(pistonPos),dir,pistonPos,true));
     }
-    public void replacePiston(BlockPos pistonPos){
+    private void replacePiston(BlockPos pistonPos){
         if(pistonPos==null)
             return;
         int oldSlot = player.getInventory().selectedSlot;
         selectItem(null,pistonType);
         interactionManager.interactBlock(
                 player,
-                Hand.MAIN_HAND,
+                player.getActiveHand(),
                 new BlockHitResult(Vec3d.ofCenter(pistonPos),
                         pistonPlacement.dir().getOpposite(),
                         pistonPos,
@@ -344,7 +350,7 @@ public class Miner{
         };
     }
     private record PistonPlacement(BlockPos pos, Direction dir){}
-    public enum Task{
+    private enum Task{
         INIT,
         PLACEPISTON,
         REDSTONETORCH,
