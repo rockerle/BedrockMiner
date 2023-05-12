@@ -1,5 +1,5 @@
 # BedrockMiner
-Fabric Mod for Vanilla Minecraft TnT'less Bedrock breaking (No 100% First Try Varanty)
+Fabric Mod for Vanilla Minecraft TnT'less Bedrock breaking (No 100% First Try Warranty)
 
 ![All Releases](https://img.shields.io/github/downloads/rockerle/bedrockminer/total)
 ![Stars](https://img.shields.io/github/stars/rockerle/BedrockMiner)
