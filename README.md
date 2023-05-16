@@ -1,9 +1,10 @@
 # BedrockMiner
-Fabric Mod for Vanilla Minecraft TnT'less Bedrock breaking (No 100% First Try Warranty)
 
 ![All Releases](https://img.shields.io/github/downloads/rockerle/bedrockminer/total)
 ![Stars](https://img.shields.io/github/stars/rockerle/BedrockMiner)
 ![Issues](https://img.shields.io/github/issues/rockerle/BedrockMiner)
+
+Fabric Mod for Vanilla Minecraft TnT'less Bedrock breaking (No 100% First Try Warranty)
 
 Needs a efficiency 5 pickaxe to mine the piston fast enough.
 Haste beacon is not necessary!!!!
