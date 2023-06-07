@@ -1,6 +1,7 @@
 package bedrockminer.bm.client;
 
 import net.minecraft.block.*;
+import net.minecraft.block.piston.PistonBehavior;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayNetworkHandler;
 import net.minecraft.client.network.ClientPlayerEntity;
@@ -87,7 +88,8 @@ public class Miner{
                     selectItem(null, Items.REDSTONE_TORCH);
                     placeBlock(torchPos);
                     checks[1] = true;
-                    toFace = Direction.fromVector(pistonPlacement.pos.subtract(new Vec3i(bedrockBlock.getX(), bedrockBlock.getY(), bedrockBlock.getZ())));
+                    BlockPos dirPos = pistonPlacement.pos.subtract(new Vec3i(bedrockBlock.getX(), bedrockBlock.getY(), bedrockBlock.getZ()));
+                    toFace = Direction.fromVector(dirPos.getX(),dirPos.getY(),dirPos.getZ());
                     this.currentTask=Task.ROTATEPLAYER;
                 }
             }
@@ -123,13 +125,13 @@ public class Miner{
             case MINEPISTON -> {
                 if(failedCounter>0 || this.pistonPlacement==null)
                     this.reset();
-                if(player.world.getBlockState(this.pistonPlacement.pos()).isOf(Blocks.MOVING_PISTON)){
+                if(player.getWorld().getBlockState(this.pistonPlacement.pos()).isOf(Blocks.MOVING_PISTON)){
                     player.sendMessage(Text.of("probably too late to mine the piston in time. Try again another time"));
                     failedCounter++;
                     break;
                 }
 
-                if(player.world.getBlockState(this.pistonPlacement.pos()).get(Properties.EXTENDED)) {
+                if(player.getWorld().getBlockState(this.pistonPlacement.pos()).get(Properties.EXTENDED)) {
                     mineBedrock();
                 }else{
                     failedCounter++;
@@ -160,8 +162,8 @@ public class Miner{
         this.alreadyRunning=true;
         this.pistonPlacement = new PistonPlacement(
                 bp.offset(offsetDir),
-                player.world.getBlockState(bp.offset(offsetDir).offset(Direction.UP)).isAir()?Direction.UP:canPistonExtend(bp.offset(offsetDir)));
-        if(this.pistonPlacement.pos().equals(player.getBlockPos()) || player.world.isOutOfHeightLimit(this.pistonPlacement.pos()))
+                player.getWorld().getBlockState(bp.offset(offsetDir).offset(Direction.UP)).isAir()?Direction.UP:canPistonExtend(bp.offset(offsetDir)));
+        if(this.pistonPlacement.pos().equals(player.getBlockPos()) || player.getWorld().isOutOfHeightLimit(this.pistonPlacement.pos()))
             this.pistonPlacement=null;
         if(!checkPickaxe()){
             player.sendMessage(Text.of("$5No Pickaxe with Efficiency V in inventory found!"));
@@ -259,7 +261,8 @@ public class Miner{
         for(Direction d: Direction.values()){
             if(d.equals(Direction.UP))
                 continue;
-            if(player.world.getBlockState(pistonBody.offset(d)).getMaterial().isReplaceable()){
+            //old condition from pre 1.20: player.getWorld().getBlockState(pistonBody.offset(d)).getMaterial().isReplaceable()
+            if(player.getWorld().getBlockState(pistonBody.offset(d)).getPistonBehavior().equals(PistonBehavior.DESTROY)){
                 return d;
             }
         }
@@ -271,11 +274,11 @@ public class Miner{
                 continue;
             }
             BlockPos probePos = pistonBody.offset(d);
-            BlockState probeState = player.world.getBlockState(probePos);
+            BlockState probeState = player.getWorld().getBlockState(probePos);
             if(probeState.isAir()) {
-                if (player.world.getBlockState(probePos.down()).hasSolidTopSurface(player.world, probePos.down(), player))
+                if (player.getWorld().getBlockState(probePos.down()).hasSolidTopSurface(player.getWorld(), probePos.down(), player))
                     return probePos;
-                else if (player.world.getBlockState(probePos.offset(Direction.DOWN)).isAir() && !probePos.offset(Direction.DOWN).equals(player.getBlockPos().add(0,1,0)) && !probePos.offset(Direction.DOWN).equals(player.getBlockPos()) && probePos.getY() > -63 && !player.world.isOutOfHeightLimit(probePos)) {
+                else if (player.getWorld().getBlockState(probePos.offset(Direction.DOWN)).isAir() && !probePos.offset(Direction.DOWN).equals(player.getBlockPos().add(0,1,0)) && !probePos.offset(Direction.DOWN).equals(player.getBlockPos()) && probePos.getY() > -63 && !player.getWorld().isOutOfHeightLimit(probePos)) {
                     supportBlock = probePos.offset(Direction.DOWN);
                     return probePos;
                 }

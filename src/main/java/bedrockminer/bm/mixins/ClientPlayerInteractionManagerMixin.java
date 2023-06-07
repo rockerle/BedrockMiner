@@ -46,7 +46,7 @@ public class ClientPlayerInteractionManagerMixin {
                 cir.cancel();
                 return;
             }
-            if(m.getTargetBlocks().contains(client.player.world.getBlockState(pos).getBlock())){
+            if(m.getTargetBlocks().contains(client.player.getWorld().getBlockState(pos).getBlock())){
                 m.start(pos,direction);
                 cir.cancel();
             }else{
@@ -84,7 +84,7 @@ public class ClientPlayerInteractionManagerMixin {
     public void bedrockminer$InteractItem(PlayerEntity player, Hand hand, CallbackInfoReturnable<ActionResult> cir){
         if(!interacting && clickMine && client.crosshairTarget.getType() == HitResult.Type.BLOCK) {
             interacting = !interacting;
-            Block toAdd = player.world.getBlockState(((BlockHitResult) client.crosshairTarget).getBlockPos()).getBlock();
+            Block toAdd = player.getWorld().getBlockState(((BlockHitResult) client.crosshairTarget).getBlockPos()).getBlock();
             if (m.getTargetBlocks().contains(toAdd)){
                 m.removeTargetBlock(toAdd);
                 player.sendMessage(Text.of("Removed "+ I18n.translate(toAdd.getTranslationKey())+" from target block list"));
