@@ -261,7 +261,6 @@ public class Miner{
         for(Direction d: Direction.values()){
             if(d.equals(Direction.UP))
                 continue;
-            //old condition from pre 1.20: player.getWorld().getBlockState(pistonBody.offset(d)).getMaterial().isReplaceable()
             if(player.getWorld().getBlockState(pistonBody.offset(d)).getPistonBehavior().equals(PistonBehavior.DESTROY)){
                 return d;
             }
