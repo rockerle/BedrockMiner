@@ -34,7 +34,7 @@ jobs:
       uses: ncipollo/release-action@v1
       with:
         artifacts: "build/libs/*.jar"
-        name: Bedorckminer-MC-1.${{ steps.tag.outputs.MAJ }}.${{ steps.tag.outputs.MIN }}
+        name: Bedrockminer-MC-1.${{ steps.tag.outputs.MAJ }}.${{ steps.tag.outputs.MIN }}
         tag: MC-1.${{ steps.tag.outputs.MAJ }}
         allowUpdates: true
         replacesArtifacts: false
