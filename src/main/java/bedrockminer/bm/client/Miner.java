@@ -1,7 +1,6 @@
 package bedrockminer.bm.client;
 
 import net.minecraft.block.*;
-import net.minecraft.block.piston.PistonBehavior;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayNetworkHandler;
 import net.minecraft.client.network.ClientPlayerEntity;
@@ -261,7 +260,7 @@ public class Miner{
         for(Direction d: Direction.values()){
             if(d.equals(Direction.UP))
                 continue;
-            if(player.getWorld().getBlockState(pistonBody.offset(d)).getPistonBehavior().equals(PistonBehavior.DESTROY)){
+            if(player.getWorld().getBlockState(pistonBody.offset(d)).isReplaceable()){
                 return d;
             }
         }
