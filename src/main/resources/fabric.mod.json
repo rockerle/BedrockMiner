@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "bedrockminer",
-  "version": "2.1",
+  "version": "2.2",
   "name": "BedrockMiner",
   "description": "",
   "authors": ["rockerle"],
@@ -22,7 +22,7 @@
   "depends": {
     "fabricloader": ">=0.14.11",
     "fabric": "*",
-    "minecraft": "1.20.2",
+    "minecraft": "1.20.3",
     "java": ">=17"
   }
 }
