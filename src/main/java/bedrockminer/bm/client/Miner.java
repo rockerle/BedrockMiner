@@ -14,6 +14,9 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.network.packet.c2s.play.PlayerActionC2SPacket;
 import net.minecraft.network.packet.c2s.play.PlayerMoveC2SPacket;
+import net.minecraft.registry.Registry;
+import net.minecraft.registry.RegistryKeys;
+import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.state.property.Properties;
 import net.minecraft.text.Text;
 import net.minecraft.util.hit.BlockHitResult;
@@ -42,6 +45,8 @@ public class Miner{
     private final List<Item> allowedTools = List.of(Items.NETHERITE_PICKAXE,Items.DIAMOND_PICKAXE);
     private List<Item> allowedSupportBlocks = List.of(Items.SLIME_BLOCK, Items.NETHERRACK);
     private List<Block> allowedBlocksToMine = new ArrayList<>(List.of(Blocks.BEDROCK));
+    private Registry<Enchantment> enchantmentRegistry;
+    private RegistryEntry<Enchantment> effRegEntry;
 
     public Miner(ClientPlayerEntity player){
         this.player = player;
@@ -49,6 +54,8 @@ public class Miner{
         this.interactionManager = MinecraftClient.getInstance().interactionManager;
         this.alreadyRunning = false;
         this.currentTask = Task.NOTHING;
+        this.enchantmentRegistry = player.getWorld().getRegistryManager().get(RegistryKeys.ENCHANTMENT);
+        this.effRegEntry = enchantmentRegistry.getEntry(Enchantments.EFFICIENCY).get();
     }
     //-------------------- Miner ---------------------------------------
     public void tick(){
@@ -80,11 +87,11 @@ public class Miner{
             }
             case REDSTONETORCH -> {
                 if(supportBlock!=null){
-                    selectItem(null,allowedSupportBlocks);
+                    selectItem(false,allowedSupportBlocks);
                     placeBlock(supportBlock);
                 }
                 if(torchPos!=null && checks[0] && !checks[1]) {
-                    selectItem(null, Items.REDSTONE_TORCH);
+                    selectItem(false, Items.REDSTONE_TORCH);
                     placeBlock(torchPos);
                     checks[1] = true;
                     BlockPos dirPos = pistonPlacement.pos.subtract(new Vec3i(bedrockBlock.getX(), bedrockBlock.getY(), bedrockBlock.getZ()));
@@ -114,7 +121,7 @@ public class Miner{
             }
             case SWITCHTOPICK ->{
                 toFace=pistonPlacement.dir().getOpposite();
-                if(selectItem(Enchantments.EFFICIENCY,pickaxeType)){
+                if(selectItem(true,pickaxeType)){
                     this.currentTask = Task.MINEPISTON;
                 }else{
                     player.sendMessage(Text.of("§5Pickaxe has not been found!"));
@@ -208,7 +215,8 @@ public class Miner{
         ItemStack tempStack;
         for(int i=0;i<36;i++){
             tempStack = inv.getStack(i);
-            if(EnchantmentHelper.getLevel(Enchantments.EFFICIENCY,tempStack)==5 && allowedTools.contains(tempStack.getItem())) {
+            if(EnchantmentHelper.getLevel(effRegEntry,tempStack)==5){
+//            if(EnchantmentHelper.getLevel(Enchantments.EFFICIENCY,tempStack)==5 && allowedTools.contains(tempStack.getItem())) {
                 pickSlot = i;
                 break;
             }
@@ -220,25 +228,25 @@ public class Miner{
         pickaxeType = inv.getStack(pickSlot).getItem();
         return true;
     }
-    private boolean selectItem(Enchantment e, List<Item> items){
+    private boolean selectItem(boolean e, List<Item> items){
         for (Item i : items) {
             if(selectItem(e,i))
                 return true;
         }
         return false;
     }
-    private boolean selectItem(Enchantment e, Item item){
+    private boolean selectItem(boolean e, Item item){
         PlayerInventory inv = player.getInventory();
         ItemStack iS;
         int slot = -1;
         for(int i=0;i<36;i++){
             iS = inv.getStack(i);
             if(iS.isOf(item)) {
-                if(e==null) {
+                if(!e) {
                     slot = i;
                     break;
                 } else {
-                    if(EnchantmentHelper.getLevel(e,iS)==5){
+                    if(EnchantmentHelper.getLevel(effRegEntry,iS)==5){
                         slot = i;
                         break;
                     }
@@ -288,7 +296,9 @@ public class Miner{
     private void mineBedrock(){
         breakBlock(this.torchPos);
         breakBlock(this.pistonPlacement.pos());
+//        breakBlock(this.torchPos);
         replacePiston(this.pistonPlacement.pos());
+//        breakBlock(this.torchPos);
         if(this.supportBlock!=null) {
             breakBlock(this.supportBlock);
             this.supportBlock=null;
@@ -300,7 +310,7 @@ public class Miner{
     private void placePiston(BlockPos pistonPos, Direction dir){
         if(pistonPos==null || dir == null)
             return;
-        selectItem(null,pistonType);
+        selectItem(false,pistonType);
         interactionManager.interactBlock(
                 player,
                 player.getActiveHand(),
@@ -310,7 +320,7 @@ public class Miner{
         if(pistonPos==null)
             return;
         int oldSlot = player.getInventory().selectedSlot;
-        selectItem(null,pistonType);
+        selectItem(false,pistonType);
         interactionManager.interactBlock(
                 player,
                 player.getActiveHand(),
